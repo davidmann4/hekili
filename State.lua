@@ -1478,9 +1478,13 @@ state.raid_event = setmetatable( {}, {
 
 -- We'll pretend we're in an active raid_event.adds when there are multiple targets.
 state.raid_event.adds = setmetatable( {
-    ["in"] = 3600, -- raid_event.adds.in appears to return time to the next add event, so we can just always say it's waaaay in the future.
+    ["in"] = 3600,
 }, {
     __index = function( t, k )
+        local profile = Hekili and Hekili.DB and Hekili.DB.profile
+        local encounterID = state.encounterID or 0
+        local difficulty = state.encounterDifficulty or 0 -- 14 Normal, 15 Heroic, 16 Mythic, 17 LFR retail
+
         if k == "up" or k == "exists" then
             return state.active_enemies > 1
         elseif k == "down" then
@@ -1488,11 +1492,41 @@ state.raid_event.adds = setmetatable( {
         elseif k == "count" then
             return max( 0, state.active_enemies - 1 )
         elseif k == "in" then
-            return state.active_enemies > 1 and 0 or 3600
+            -- Determine next configured spawn time if available.
+            local nextIn = 3600
+            if profile and encounterID > 0 then
+                local e = profile.raidEvents and profile.raidEvents.adds and profile.raidEvents.adds.encounters[ encounterID ]
+                if e then
+                    local key = difficulty == 17 and 'lfr' or ( difficulty == 14 and 'normal' or ( difficulty == 15 and 'heroic' or ( difficulty == 16 and 'mythic' or nil ) ) )
+                    local strTimes = key and e[ key ] or nil
+                    if not strTimes then
+                        -- Fallback priority order mythic > heroic > normal > lfr
+                        strTimes = e.mythic or e.heroic or e.normal or e.lfr
+                    end
+                    if strTimes then
+                        local times = {}
+                        for num in strTimes:gmatch( "[^,]+" ) do
+                            local v = tonumber( strtrim( num ) )
+                            if v and v >= 0 then times[ #times + 1 ] = v end
+                        end
+                        if #times > 0 then
+                            table.sort( times )
+                            local elapsed = state.time
+                            for i, spawn in ipairs( times ) do
+                                if spawn > elapsed then
+                                    nextIn = spawn - elapsed
+                                    break
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+            if state.active_enemies > 1 then return 0 end
+            return nextIn
         elseif k == "duration" or k == "remains" then
             return state.active_enemies > 1 and state.fight_remains or 0
         elseif raid_event_filter[k] ~= nil then return raid_event_filter[k] end
-
         return 0
     end
 } )

@@ -8928,6 +8928,402 @@ do
                 }
             },
 
+            raidEvents = {
+                type = "group",
+                name = "Raid Events",
+                desc = "Configure raid encounter event timings such as add spawns.",
+                order = 85,
+                childGroups = "tab",
+                args = (function()
+                    local args = {}
+
+                    local function ensureStructure()
+                        local p = Hekili.DB and Hekili.DB.profile
+                        if not p then return end
+                        p.raidEvents = p.raidEvents or {}
+                        p.raidEvents.adds = p.raidEvents.adds or { encounters = {}, editEncounter = 0, selectedEncounter = 0 }
+                        p.raidEvents.adds.encounters = p.raidEvents.adds.encounters or {}
+                    end
+
+                    local function getEncounterList()
+                        ensureStructure()
+                        local p = Hekili.DB.profile
+                        local list = { [0] = "(none)" }
+                        for id, data in pairs( p.raidEvents.adds.encounters ) do
+                            if type( id ) == "number" then
+                                local label = ( data.name and data.name .. " (" .. id .. ")" ) or tostring( id )
+                                list[ id ] = label
+                            end
+                        end
+                        return list
+                    end
+
+                    args.header = {
+                        type = "header",
+                        name = "Add Spawn Timers",
+                        order = 1,
+                    }
+                    args.desc = {
+                        type = "description",
+                        name = "Configure expected add spawn times for raid encounters. The addon will use these timers to estimate raid_event.adds.in. You can record encounter data in combat (future feature) or enter manually now.",
+                        order = 2,
+                        width = "full"
+                    }
+                    args.encounterAdd = {
+                        type = "group",
+                        name = "Manage Encounters",
+                        inline = true,
+                        order = 5,
+                        args = {
+                            instructions = {
+                                type = "description",
+                                name = "Add encounter IDs manually. You can find Encounter IDs on sites like Wowhead or via combat logs. Editing during a boss fight is not required.",
+                                order = 1,
+                                width = "full"
+                            },
+                            newEncounterID = {
+                                type = "input",
+                                name = "New Encounter ID",
+                                desc = "Enter a numeric Encounter ID to create or select.",
+                                order = 2,
+                                width = "half",
+                                set = function( info, val )
+                                    local id = tonumber( val )
+                                    if not id or id <= 0 then return end
+                                    ensureStructure()
+                                    local p = Hekili.DB.profile
+                                    if not p.raidEvents.adds.encounters[ id ] then
+                                        p.raidEvents.adds.encounters[ id ] = { }
+                                    end
+                                    p.raidEvents.adds.editEncounter = id
+                                    if Hekili.RefreshOptions then Hekili:RefreshOptions() end
+                                end,
+                                get = function() return "" end,
+                            },
+                            encounterSelect = {
+                                type = "select",
+                                name = "Select Encounter",
+                                order = 3,
+                                values = function() return getEncounterList() end,
+                                get = function()
+                                    ensureStructure()
+                                    local p = Hekili.DB.profile
+                                    return p.raidEvents.adds.editEncounter or 0
+                                end,
+                                set = function( info, val )
+                                    ensureStructure()
+                                    Hekili.DB.profile.raidEvents.adds.editEncounter = val
+                                end,
+                                width = "full"
+                            },
+                            removeEncounter = {
+                                type = "execute",
+                                name = "Delete Encounter",
+                                confirm = true,
+                                order = 4,
+                                func = function()
+                                    ensureStructure()
+                                    local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    if id and id > 0 then
+                                        p.raidEvents.adds.encounters[ id ] = nil
+                                        p.raidEvents.adds.editEncounter = 0
+                                        if Hekili.RefreshOptions then Hekili:RefreshOptions() end
+                                    end
+                                end,
+                                disabled = function()
+                                    ensureStructure()
+                                    local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    return not ( id and id > 0 and p.raidEvents.adds.encounters[ id ] )
+                                end
+                            },
+                        }
+                    }
+                    args.editGroup = {
+                        type = "group",
+                        name = "Encounter Details",
+                        inline = true,
+                        order = 10,
+                        hidden = false,
+                        args = {
+                            noneSelected = {
+                                type = "description",
+                                name = function()
+                                    local p = Hekili.DB.profile
+                                    if p.raidEvents.adds.editEncounter and p.raidEvents.adds.editEncounter > 0 then return "" end
+                                    return "Select or create an Encounter ID above to edit its add spawn timers."
+                                end,
+                                order = 0.5,
+                                width = "full",
+                            },
+                            _normalize = {
+                                type = "description",
+                                name = "",
+                                hidden = true,
+                                order = 0,
+                                -- dummy entry to hold helper function
+                                dialogControl = "SFX-Blank",
+                            },
+                            name = {
+                                type = "input",
+                                name = "Encounter Name",
+                                order = 1,
+                                width = "full",
+                                hidden = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    return not ( p.raidEvents.adds.editEncounter and p.raidEvents.adds.editEncounter > 0 )
+                                end,
+                                get = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    local e = id > 0 and p.raidEvents.adds.encounters[ id ]
+                                    return ( e and e.name ) or ""
+                                end,
+                                set = function( info, val )
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    if id == 0 then return end
+                                    p.raidEvents.adds.encounters[ id ] = p.raidEvents.adds.encounters[ id ] or {}
+                                    p.raidEvents.adds.encounters[ id ].name = ( val ~= "" ) and val or nil
+                                end,
+                            },
+                            difficultyLabel = {
+                                type = "description",
+                                name = "Enter comma-separated spawn times (seconds) for each difficulty. Example: 45,90,135,210",
+                                order = 2,
+                                width = "full",
+                                hidden = function()
+                                    local p = Hekili.DB.profile
+                                    return not ( p.raidEvents.adds.editEncounter and p.raidEvents.adds.editEncounter > 0 )
+                                end,
+                            },
+                            lfr = {
+                                type = "input",
+                                name = "LFR",
+                                order = 10,
+                                width = "full",
+                                hidden = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    return not ( p.raidEvents.adds.editEncounter and p.raidEvents.adds.editEncounter > 0 )
+                                end,
+                                get = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    local e = id > 0 and p.raidEvents.adds.encounters[ id ]
+                                    return ( e and e.lfr ) or ""
+                                end,
+                                set = function( info, val )
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    if id == 0 then return end
+                                    if val == "" then p.raidEvents.adds.encounters[ id ].lfr = nil; return end
+                                    local numbers = {}
+                                    for num in val:gmatch("[^,]+") do
+                                        local v = tonumber( strtrim( num ) )
+                                        if v and v >= 0 then numbers[#numbers+1] = v end
+                                    end
+                                    table.sort( numbers )
+                                    local cleaned = table.concat( numbers, "," )
+                                    p.raidEvents.adds.encounters[ id ].lfr = cleaned ~= "" and cleaned or nil
+                                end,
+                            },
+                            normal = {
+                                type = "input",
+                                name = "Normal",
+                                order = 11,
+                                width = "full",
+                                hidden = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    return not ( p.raidEvents.adds.editEncounter and p.raidEvents.adds.editEncounter > 0 )
+                                end,
+                                get = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    local e = id > 0 and p.raidEvents.adds.encounters[ id ]
+                                    return ( e and e.normal ) or ""
+                                end,
+                                set = function( info, val )
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    if id == 0 then return end
+                                    if val == "" then p.raidEvents.adds.encounters[ id ].normal = nil; return end
+                                    local numbers = {}
+                                    for num in val:gmatch("[^,]+") do
+                                        local v = tonumber( strtrim( num ) )
+                                        if v and v >= 0 then numbers[#numbers+1] = v end
+                                    end
+                                    table.sort( numbers )
+                                    local cleaned = table.concat( numbers, "," )
+                                    p.raidEvents.adds.encounters[ id ].normal = cleaned ~= "" and cleaned or nil
+                                end,
+                            },
+                            heroic = {
+                                type = "input",
+                                name = "Heroic",
+                                order = 12,
+                                width = "full",
+                                hidden = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    return not ( p.raidEvents.adds.editEncounter and p.raidEvents.adds.editEncounter > 0 )
+                                end,
+                                get = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    local e = id > 0 and p.raidEvents.adds.encounters[ id ]
+                                    return ( e and e.heroic ) or ""
+                                end,
+                                set = function( info, val )
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    if id == 0 then return end
+                                    if val == "" then p.raidEvents.adds.encounters[ id ].heroic = nil; return end
+                                    local numbers = {}
+                                    for num in val:gmatch("[^,]+") do
+                                        local v = tonumber( strtrim( num ) )
+                                        if v and v >= 0 then numbers[#numbers+1] = v end
+                                    end
+                                    table.sort( numbers )
+                                    local cleaned = table.concat( numbers, "," )
+                                    p.raidEvents.adds.encounters[ id ].heroic = cleaned ~= "" and cleaned or nil
+                                end,
+                            },
+                            mythic = {
+                                type = "input",
+                                name = "Mythic",
+                                order = 13,
+                                width = "full",
+                                hidden = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    return not ( p.raidEvents.adds.editEncounter and p.raidEvents.adds.editEncounter > 0 )
+                                end,
+                                get = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    local e = id > 0 and p.raidEvents.adds.encounters[ id ]
+                                    return ( e and e.mythic ) or ""
+                                end,
+                                set = function( info, val )
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    if id == 0 then return end
+                                    if val == "" then p.raidEvents.adds.encounters[ id ].mythic = nil; return end
+                                    local numbers = {}
+                                    for num in val:gmatch("[^,]+") do
+                                        local v = tonumber( strtrim( num ) )
+                                        if v and v >= 0 then numbers[#numbers+1] = v end
+                                    end
+                                    table.sort( numbers )
+                                    local cleaned = table.concat( numbers, "," )
+                                    p.raidEvents.adds.encounters[ id ].mythic = cleaned ~= "" and cleaned or nil
+                                end,
+                            },
+                            clearTimes = {
+                                type = "execute",
+                                name = "Clear Times",
+                                order = 20,
+                                hidden = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    return not ( p.raidEvents.adds.editEncounter and p.raidEvents.adds.editEncounter > 0 )
+                                end,
+                                func = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    if id == 0 then return end
+                                    local e = p.raidEvents.adds.encounters[ id ]
+                                    if e then
+                                        e.lfr, e.normal, e.heroic, e.mythic = nil, nil, nil, nil
+                                    end
+                                end,
+                                disabled = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    local e = id > 0 and p.raidEvents.adds.encounters[ id ]
+                                    return not e or ( not e.lfr and not e.normal and not e.heroic and not e.mythic )
+                                end
+                            },
+                            preview = {
+                                type = "description",
+                                name = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    if not ( id and id > 0 ) then return "" end
+                                    local e = p.raidEvents.adds.encounters[ id ]
+                                    if not e then return "" end
+                                    local function fmt(label, str)
+                                        if not str then return nil end
+                                        local times = {}
+                                        for num in str:gmatch("[^,]+") do
+                                            local v = tonumber(num)
+                                            if v then times[#times+1] = v end
+                                        end
+                                        if #times == 0 then return nil end
+                                        return ("%s: %s (next: %s)"):format(label, table.concat(times, "," ), times[1])
+                                    end
+                                    local lines = {}
+                                    lines[#lines+1] = fmt("LFR", e.lfr)
+                                    lines[#lines+1] = fmt("Normal", e.normal)
+                                    lines[#lines+1] = fmt("Heroic", e.heroic)
+                                    lines[#lines+1] = fmt("Mythic", e.mythic)
+                                    local out = {}
+                                    for _, line in ipairs(lines) do if line then out[#out+1] = line end end
+                                    return #out > 0 and ("|cFF00FF00Configured Timers|r\n" .. table.concat(out, "\n")) or "No timers configured for this encounter yet."
+                                end,
+                                order = 25,
+                                width = "full",
+                                hidden = function()
+                                    ensureStructure(); local p = Hekili.DB.profile
+                                    return not ( p.raidEvents.adds.editEncounter and p.raidEvents.adds.editEncounter > 0 )
+                                end,
+                            },
+                            export = {
+                                type = "input",
+                                name = "Export (Copy)",
+                                order = 30,
+                                width = "full",
+                                get = function()
+                                    local p = Hekili.DB.profile
+                                    local id = p.raidEvents.adds.editEncounter
+                                    local e = id > 0 and p.raidEvents.adds.encounters[ id ]
+                                    if not e then return "" end
+                                    local payload = { type = "raidEncounterAdds", id = id, name = e.name, lfr = e.lfr, normal = e.normal, heroic = e.heroic, mythic = e.mythic }
+                                    if TableToString then
+                                        return TableToString( payload, true )
+                                    end
+                                    return ""
+                                end,
+                                set = function() end,
+                            },
+                            import = {
+                                type = "input",
+                                name = "Import Encounter",
+                                order = 31,
+                                width = "full",
+                                set = function( info, val )
+                                    if not ( val and val ~= "" ) then return end
+                                    if StringToTable then
+                                        local data = StringToTable( val, true )
+                                        if type( data ) == "table" and ( data.type == "raidEncounterAdds" or data.id ) then
+                                            local p = Hekili.DB.profile
+                                            p.raidEvents.adds.encounters[ data.id ] = {
+                                                name = data.name,
+                                                lfr = data.lfr,
+                                                normal = data.normal,
+                                                heroic = data.heroic,
+                                                mythic = data.mythic
+                                            }
+                                            p.raidEvents.adds.editEncounter = data.id
+                                        end
+                                    end
+                                end,
+                                get = function() return "" end
+                            },
+                        },
+                    }
+                    return args
+                end)()
+            },
+
             snapshots = {
                 type = "group",
                 name = "Snapshots (Troubleshooting)",

@@ -111,6 +111,10 @@ local function InitDBM()
     if not DBM or BM.DBMInitialized then return end
     BM.DBMInitialized = true
     DBM:RegisterCallback( "DBM_TimerBegin", function( _, timerId, msg, duration, icon, timerType, spellId, dbmType, _, _, _, _, timerCount )
+        -- replaced by shared handler below
+    end ) -- kept temporarily for backward compatibility; immediately overridden below.
+    -- Unified handler for both DBM_TimerBegin and DBM_TimerStart to avoid duplicated logic.
+    local function HandleDBMTimer( eventName, timerId, msg, duration, icon, timerType, spellId, dbmType, _a, _b, _c, _d, timerCount )
         if not timerId then return end
         BM.bars[ timerId ] = BM.bars[ timerId ] or {}
         local bar = BM.bars[ timerId ]
@@ -120,11 +124,18 @@ local function InitDBM()
         bar.expires = Now() + ( duration or 0 )
         bar.icon = icon
         bar.timerType = timerType
-        bar.spellId = spellId and tostring( spellId )
-        bar.count = timerCount
+        -- Preserve existing spellId if new one is nil (older callback variants sometimes omit).
+        bar.spellId = spellId and tostring( spellId ) or bar.spellId
+        -- If a count is provided (TimerBegin) use it; otherwise ensure at least 1.
+        bar.count = timerCount or bar.count or 1
         bar.paused = false
         bar.remaining = nil
-    end )
+    end
+
+    -- Re-register both events with the unified handler (overrides earlier TimerBegin registration above).
+    for _, evt in ipairs( { "DBM_TimerBegin", "DBM_TimerStart" } ) do
+        DBM:RegisterCallback( evt, HandleDBMTimer )
+    end
     DBM:RegisterCallback( "DBM_TimerStop", function( _, timerId )
         if timerId and BM.bars[ timerId ] then BM.bars[ timerId ] = nil end
     end )
@@ -158,32 +169,37 @@ end
 local function InitBigWigs()
     if not BigWigsLoader or BM.BigWigsInitialized then return end
     BM.BigWigsInitialized = true
-    BigWigsLoader.RegisterMessage( BM, "BigWigs_StartBar", function( _, addon, spellId, duration, _, text, count, icon )
+    -- BigWigs_StartBar(event, module, key, text, time, icon)
+    BigWigsLoader.RegisterMessage( BM, "BigWigs_StartBar", function( _, module, key, text, time, icon )
         if not text then return end
-        BM.bars[ text ] = BM.bars[ text ] or {}
-        local bar = BM.bars[ text ]
+        local id = key or text
+        BM.bars[ id ] = BM.bars[ id ] or {}
+        local bar = BM.bars[ id ]
         bar.text = text
         bar.message = text
-        bar.duration = duration
-        bar.expires = Now() + ( duration or 0 )
+        bar.duration = time
+        bar.expires = Now() + ( time or 0 )
         bar.icon = icon
-        bar.spellId = spellId and tostring( spellId )
-        bar.count = count
+        local nkey = tonumber( key )
+        bar.spellId = nkey and tostring( nkey ) or bar.spellId
+        bar.count = 1
         bar.paused = false
         bar.remaining = nil
     end )
-    BigWigsLoader.RegisterMessage( BM, "BigWigs_StopBar", function( _, addon, text )
-        if text and BM.bars[ text ] then BM.bars[ text ] = nil end
+    BigWigsLoader.RegisterMessage( BM, "BigWigs_StopBar", function( _, module, key )
+        if key and BM.bars[ key ] then
+            BM.bars[ key ] = nil
+        end
     end )
-    BigWigsLoader.RegisterMessage( BM, "BigWigs_PauseBar", function( _, addon, text )
-        local bar = text and BM.bars[ text ]
+    BigWigsLoader.RegisterMessage( BM, "BigWigs_PauseBar", function( _, module, key )
+        local bar = key and BM.bars[ key ]
         if bar and not bar.paused then
             bar.paused = true
             bar.remaining = bar.expires - Now()
         end
     end )
-    BigWigsLoader.RegisterMessage( BM, "BigWigs_ResumeBar", function( _, addon, text )
-        local bar = text and BM.bars[ text ]
+    BigWigsLoader.RegisterMessage( BM, "BigWigs_ResumeBar", function( _, module, key )
+        local bar = key and BM.bars[ key ]
         if bar and bar.paused then
             bar.paused = false
             if bar.remaining and bar.remaining > 0 then

@@ -14,11 +14,24 @@ BM.sources = BM.sources or {} -- Optional source info.
 
 local function Now() return GetTime() end
 
-local function PurgeExpired()
+-- Purge expired bars.  We optionally retain bars for up to `retain` seconds after
+-- they expire so we can still apply positive offsets (e.g., bar ends then adds
+-- spawn 5s later).  Negative offsets don't need retention since the adjusted
+-- event occurs before the bar expires.
+local function PurgeExpired( retain )
+    retain = retain or 0
+    if retain < 0 then retain = 0 end
     local now = Now()
     for id, bar in pairs( BM.bars ) do
-        if ( not bar.paused and bar.expires <= now ) or ( bar.paused and ( bar.remaining or 0 ) <= 0 ) then
-            BM.bars[ id ] = nil
+        if not bar.paused then
+            -- Keep until (expires + retain) has passed.
+            if bar.expires + retain <= now then
+                BM.bars[ id ] = nil
+            end
+        else
+            if ( bar.remaining or 0 ) <= 0 then
+                BM.bars[ id ] = nil
+            end
         end
     end
 end
@@ -30,12 +43,27 @@ end
 -- After enhancement: filters compiled to { kind = 'id'|'text', value=..., offset=seconds }
 function BM:GetNextMatching( filters )
     if not filters or #filters == 0 then return nil end
-    PurgeExpired()
+
+    -- Determine the maximum positive offset so we can retain expired bars just long enough
+    -- to allow their offset-adjusted events to elapse naturally.
+    local maxPosOffset = 0
+    for i = 1, #filters do
+        local o = filters[i].offset or 0
+        if o > maxPosOffset then maxPosOffset = o end
+    end
+
+    PurgeExpired( maxPosOffset )
+
     local now = Now()
     local best
+
     for id, bar in pairs( self.bars ) do
         local baseRemaining = bar.paused and ( bar.remaining or ( bar.expires - now ) ) or ( bar.expires - now )
-        if baseRemaining > -30 then
+        -- Skip bars that are older than the maximum positive offset window (no longer informative).
+        if baseRemaining > -maxPosOffset then
+            -- If this is a freshly restarted bar and we have a clone tail (id:timestamp) for the previous instance,
+            -- make sure we don't immediately favor the new long bar over the tail whose adjusted event is still pending.
+            -- We'll detect clones by searching for id .. ':' prefixes; if any clone yields an adjusted time <= 0, we can clamp at 0.
             local text = ( bar.message or bar.text or "" ):lower()
             local spellId = bar.spellId and tonumber( bar.spellId ) or nil
             for _, f in ipairs( filters ) do
@@ -50,6 +78,7 @@ function BM:GetNextMatching( filters )
                     if remaining > 0 then
                         if not best or remaining < best then best = remaining end
                     else
+                        -- Event time has passed (or is now); clamp at 0.
                         if not best or 0 < best then best = 0 end
                     end
                     break
@@ -116,6 +145,17 @@ local function InitDBM()
     -- Unified handler for both DBM_TimerBegin and DBM_TimerStart to avoid duplicated logic.
     local function HandleDBMTimer( eventName, timerId, msg, duration, icon, timerType, spellId, dbmType, _a, _b, _c, _d, timerCount )
         if not timerId then return end
+        local now = Now()
+        local existing = BM.bars[ timerId ]
+        if existing and not existing.paused and existing.expires <= now then
+            -- Clone expired bar so offset tail can finish counting down even if new bar starts.
+            local cloneId = tostring( timerId ) .. ":" .. format( '%.2f', existing.expires )
+            if not BM.bars[ cloneId ] then
+                local clone = {}
+                for k, v in pairs( existing ) do clone[ k ] = v end
+                BM.bars[ cloneId ] = clone
+            end
+        end
         BM.bars[ timerId ] = BM.bars[ timerId ] or {}
         local bar = BM.bars[ timerId ]
         bar.message = msg
@@ -173,6 +213,16 @@ local function InitBigWigs()
     BigWigsLoader.RegisterMessage( BM, "BigWigs_StartBar", function( _, module, key, text, time, icon )
         if not text then return end
         local id = key or text
+        local now = Now()
+        local existing = BM.bars[ id ]
+        if existing and not existing.paused and existing.expires <= now then
+            local cloneId = tostring( id ) .. ":" .. format( '%.2f', existing.expires )
+            if not BM.bars[ cloneId ] then
+                local clone = {}
+                for k, v in pairs( existing ) do clone[ k ] = v end
+                BM.bars[ cloneId ] = clone
+            end
+        end
         BM.bars[ id ] = BM.bars[ id ] or {}
         local bar = BM.bars[ id ]
         bar.text = text

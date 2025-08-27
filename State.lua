@@ -1478,7 +1478,7 @@ state.raid_event = setmetatable( {}, {
 
 -- We'll pretend we're in an active raid_event.adds when there are multiple targets.
 state.raid_event.adds = setmetatable( {
-    ["in"] = 3600,
+    -- intentionally leave empty; dynamic fields (including 'in') are provided via __index.
 }, {
     __index = function( t, k )
         local profile = Hekili and Hekili.DB and Hekili.DB.profile
@@ -1503,7 +1503,7 @@ state.raid_event.adds = setmetatable( {
                     end
                 end
             end
-            if state.active_enemies > 1 then return 0 end
+            if state.active_enemies > 1 then return 3600 end
             return nextIn
         elseif k == "duration" or k == "remains" then
             return state.active_enemies > 1 and state.fight_remains or 0

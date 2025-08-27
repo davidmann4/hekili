@@ -1483,7 +1483,7 @@ state.raid_event.adds = setmetatable( {
     __index = function( t, k )
         local profile = Hekili and Hekili.DB and Hekili.DB.profile
         local encounterID = state.encounterID or 0
-        local difficulty = state.encounterDifficulty or 0 -- 14 Normal, 15 Heroic, 16 Mythic, 17 LFR retail
+    -- local difficulty = state.encounterDifficulty or 0 -- difficulty no longer needed after removing manual schedules.
 
         if k == "up" or k == "exists" then
             return state.active_enemies > 1
@@ -1492,33 +1492,14 @@ state.raid_event.adds = setmetatable( {
         elseif k == "count" then
             return max( 0, state.active_enemies - 1 )
         elseif k == "in" then
-            -- Determine next configured spawn time if available.
+            -- Priority: If boss mod integration + filters exist for this encounter, use that.
             local nextIn = 3600
-            if profile and encounterID > 0 then
-                local e = profile.raidEvents and profile.raidEvents.adds and profile.raidEvents.adds.encounters[ encounterID ]
-                if e then
-                    local key = difficulty == 17 and 'lfr' or ( difficulty == 14 and 'normal' or ( difficulty == 15 and 'heroic' or ( difficulty == 16 and 'mythic' or nil ) ) )
-                    local strTimes = key and e[ key ] or nil
-                    if not strTimes then
-                        -- Fallback priority order mythic > heroic > normal > lfr
-                        strTimes = e.mythic or e.heroic or e.normal or e.lfr
-                    end
-                    if strTimes then
-                        local times = {}
-                        for num in strTimes:gmatch( "[^,]+" ) do
-                            local v = tonumber( strtrim( num ) )
-                            if v and v >= 0 then times[ #times + 1 ] = v end
-                        end
-                        if #times > 0 then
-                            table.sort( times )
-                            local elapsed = state.time
-                            for i, spawn in ipairs( times ) do
-                                if spawn > elapsed then
-                                    nextIn = spawn - elapsed
-                                    break
-                                end
-                            end
-                        end
+            if profile and encounterID > 0 and Hekili and Hekili.BossMods then
+                local e = profile.raidEvents and profile.raidEvents.adds and profile.raidEvents.adds.encounters and profile.raidEvents.adds.encounters[ encounterID ]
+                if e and e.filters and e.filters ~= "" then
+                    local bmNext = Hekili.BossMods:GetNextAddSpawn( encounterID )
+                    if bmNext and bmNext > 0 then
+                        nextIn = bmNext
                     end
                 end
             end

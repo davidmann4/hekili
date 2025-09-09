@@ -338,6 +338,7 @@ local displayTemplate = {
         fade = false,
         extend = true,
         elvuiCooldowns = false,
+        hideSwipe = false,
 
         font = ElvUI and 'PT Sans Narrow' or 'Arial Narrow',
         fontSize = 12,
@@ -1408,6 +1409,7 @@ return end
                                 order = 16,
                                 hidden = function () return _G["ElvUI"] == nil end,
                             },
+
 
                             numIcons = {
                                 type = 'range',
@@ -2861,6 +2863,14 @@ return "Position" end,
                                 desc = "Desaturate the primary icon when you should wait before using the ability.",
                                 width = 1.49,
                                 order = 1.15
+                            },
+
+                            hideSwipe = {
+                                type = "toggle",
+                                name = "Hide Cooldown Swipe",
+                                desc = "If checked, the radial cooldown swipe animation (darkening overlay) will be hidden on this display's icons. This also removes numeric cooldown text on the icon.",
+                                width = 1.49,
+                                order = 1.17,
                             },
 
                             break01 = {

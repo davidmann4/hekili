@@ -2657,8 +2657,14 @@ do
         b.Cooldown:SetFrameLevel( b:GetFrameLevel() + 1 )
         b.Cooldown:SetDrawBling( false )
         b.Cooldown:SetDrawEdge( false )
-
-        b.Cooldown.noCooldownCount = conf.hideOmniCC
+        -- Allow user to disable the radial swipe animation.
+        if b.Cooldown.SetDrawSwipe then
+            local hideSwipe = ( conf.delays and conf.delays.hideSwipe )
+            b.Cooldown:SetDrawSwipe( not hideSwipe )
+            b.Cooldown.noCooldownCount = hideSwipe
+        else
+            b.Cooldown.noCooldownCount = conf.hideOmniCC
+        end
 
         if _G["ElvUI"] and not b.isRegisteredCooldown and ( ( id == 1 and conf.elvuiCooldown ) or ( id > 1 and conf.queue.elvuiCooldown ) ) then
             local E = unpack( ElvUI )

@@ -7556,6 +7556,13 @@ do
 
         local option = ability.item and spec.items[ spell ] or spec.abilities[ spell ]
 
+        if ability.item and ability.toggle ~= "potions" then
+            local sp = rawget( profile.specs, state.spec.id )
+            if sp and sp.disable_items then
+                return true, "preference - spec disables gear/items"
+            end
+        end
+
         if not strict then
             local toggle = option.toggle
             if not toggle or toggle == "default" then toggle = ability.toggle end
@@ -7632,7 +7639,7 @@ do
         if state.filter ~= "none" and state.filter ~= toggle and not ability[ state.filter ] then return true, "display" end
         if ability.item and not ability.bagItem and not state.equipped[ ability.item ] then return false, "not equipped" end
         if toggleSpell[ spell ] and toggle and toggle ~= "none" then
-            if not self.toggle[ toggle ] or ( profile.toggles[ tQoggle ].separate and state.filter ~= toggle and not spec.noFeignedCooldown ) then return true, format( "%s filtered", toggle ) end
+            if not self.toggle[ toggle ] or ( profile.toggles[ toggle ].separate and state.filter ~= toggle and not spec.noFeignedCooldown ) then return true, format( "%s filtered", toggle ) end
         end
 
         return false

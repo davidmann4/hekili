@@ -2978,6 +2978,87 @@ function Hekili:BuildUI()
         self:CreateDisplay( disp )
     end
 
+    -- Toggle Status Panel (simple clickable widget listing toggle states)
+    do
+        local cfg = self.DB.profile.statusPanel or { enabled = false }
+        local panel = ns.UI.StatusPanel or CreateFrame( "Frame", "HekiliStatusPanel", UIParent, "BackdropTemplate" )
+        ns.UI.StatusPanel = panel
+
+        if cfg.enabled then
+            panel:Show()
+            panel:SetScale( cfg.scale or 1 )
+            panel:ClearAllPoints()
+            panel:SetPoint( "CENTER", UIParent, "CENTER", cfg.x or 0, cfg.y or 0 )
+            panel:SetMovable( true )
+            panel:EnableMouse( true )
+            panel:RegisterForDrag( "LeftButton" )
+            panel:SetScript( "OnDragStart", function( self ) if Hekili.Config then self:StartMoving() end end )
+            panel:SetScript( "OnDragStop", function( self ) self:StopMovingOrSizing(); cfg.x, cfg.y = select(4, self:GetPoint()) end )
+
+            panel:SetBackdrop( { bgFile = "Interface/Tooltips/UI-Tooltip-Background", edgeFile = "Interface/Tooltips/UI-Tooltip-Border", edgeSize = 12, insets = { left = 2, right = 2, top = 2, bottom = 2 } } )
+            panel:SetBackdropColor( 0, 0, 0, 0.5 )
+
+            panel.buttons = panel.buttons or {}
+
+            local order = { "cooldowns", "essences", "potions", "interrupts", "defensives", "funnel", "custom1", "custom2", "custom3", "custom4", "custom5", "custom6", "custom7", "custom8", "custom9", "custom10" }
+            local count = 0
+            local font = LSM:Fetch( "font", self.DB.profile.notifications.font )
+            local size = cfg.fontSize or 12
+            local spacing = cfg.spacing or 2
+            local growRight = ( cfg.grow ~= "DOWN" )
+
+            local maxW, maxH = 0, 0
+            for i, key in ipairs( order ) do
+                local t = self.DB.profile.toggles[ key ]
+                local show = ( cfg.show and cfg.show[ key ] ) ~= false
+                if t and show then
+                    count = count + 1
+                    local b = panel.buttons[ count ] or CreateFrame( "Button", nil, panel, "BackdropTemplate" )
+                    panel.buttons[ count ] = b
+                    b.key = key
+                    b:SetBackdrop( { bgFile = "Interface/Buttons/WHITE8x8" } )
+                    local on = t.value and 0 or 0.15
+                    b:SetBackdropColor( t.value and 0.1 or 0.5, t.value and 0.6 or 0.1, 0.1, 0.9 )
+                    b:SetHighlightTexture( "Interface/Buttons/UI-Listbox-Highlight2" )
+                    b:SetScript( "OnClick", function() Hekili:FireToggle( key ) Hekili:UpdateStatusPanel() end )
+                    b.text = b.text or b:CreateFontString( nil, "OVERLAY" )
+                    b.text:SetFont( font, size, "OUTLINE" )
+                    local label = ( key:match("custom%d+") and ( t.name or key ) ) or key:gsub("^%l", string.upper )
+                    b.text:SetText( label )
+                    b.text:SetPoint( "CENTER" )
+                    b:SetSize( b.text:GetStringWidth() + 12, size + 6 )
+
+                    if count == 1 then
+                        b:ClearAllPoints()
+                        b:SetPoint( "TOPLEFT", panel, "TOPLEFT", 6, -6 )
+                    else
+                        local anchor = panel.buttons[ count - 1 ]
+                        b:ClearAllPoints()
+                        if growRight then
+                            b:SetPoint( "LEFT", anchor, "RIGHT", spacing, 0 )
+                        else
+                            b:SetPoint( "TOP", anchor, "BOTTOM", 0, -spacing )
+                        end
+                    end
+                    b:Show()
+                    maxW = growRight and ( maxW + b:GetWidth() + ( count > 1 and spacing or 0 ) ) or math.max( maxW, b:GetWidth() )
+                    maxH = growRight and math.max( maxH, b:GetHeight() ) or ( maxH + b:GetHeight() + ( count > 1 and spacing or 0 ) )
+                end
+            end
+
+            -- Hide extras
+            for i = count + 1, #panel.buttons do panel.buttons[i]:Hide() end
+
+            if growRight then
+                panel:SetSize( maxW + 12, maxH + 12 )
+            else
+                panel:SetSize( maxW + 12, maxH + 12 )
+            end
+        else
+            panel:Hide()
+        end
+    end
+
     --if Hekili.Config then ns.StartConfiguration() end
     if MasqueGroup then
         MasqueGroup:ReSkin()
@@ -2995,6 +3076,11 @@ function Hekili:BuildUI()
     if Hekili.Config then
         ns.StartConfiguration(true)
     end
+end
+
+function Hekili:UpdateStatusPanel()
+    if not ns.UI.StatusPanel or not self.DB.profile.statusPanel.enabled then return end
+    self:BuildUI() -- simple rebuild for now; could be optimized
 end
 
 local T = ns.lib.Format.Tokens

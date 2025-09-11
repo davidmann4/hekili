@@ -593,6 +593,34 @@ do
                     height = 40,
                 },
 
+                statusPanel = { -- Toggle Status Widget
+                    enabled = true,
+                    x = 0,
+                    y = 200,
+                    scale = 1,
+                    grow = "RIGHT", -- or DOWN
+                    spacing = 2,
+                    fontSize = 12,
+                    show = {
+                        cooldowns = true,
+                        essences = true,
+                        potions = true,
+                        interrupts = true,
+                        defensives = true,
+                        funnel = true,
+                        custom1 = true,
+                        custom2 = true,
+                        custom3 = true,
+                        custom4 = true,
+                        custom5 = true,
+                        custom6 = true,
+                        custom7 = true,
+                        custom8 = true,
+                        custom9 = true,
+                        custom10 = true,
+                    }
+                },
+
                 displays = {
                     Primary = {
                         enabled = true,
@@ -917,6 +945,22 @@ return end
 
         conf[ option ] = val
         QueueRebuildUI()
+    end
+
+    -- Status Panel option handlers.
+    local function GetStatusOption( info )
+        local opt = info[ #info ]
+        local conf = Hekili.DB.profile.statusPanel or {}
+        return conf[ opt ]
+    end
+
+    local function SetStatusOption( info, val )
+        local opt = info[ #info ]
+        local conf = Hekili.DB.profile.statusPanel
+        if conf then
+            conf[ opt ] = val
+            QueueRebuildUI()
+        end
     end
 
     local fontStyles = {
@@ -3217,6 +3261,77 @@ return "Position" end,
                             order = 5,
                             args = tableCopy( fontElements ),
                         },
+                    }
+                },
+
+                statusPanelHeader = {
+                    type = "header",
+                    name = "Toggle Status Panel",
+                    order = 953,
+                },
+
+                statusPanelBtn = {
+                    type = "execute",
+                    name = "Toggle Status Panel",
+                    desc = "Configure the small bar of clickable toggle buttons.",
+                    func = function() ACD:SelectGroup( "Hekili", "displays", "statusPanel" ) end,
+                    order = 954,
+                },
+
+                statusPanel = {
+                    type = "group",
+                    name = "|cFF1EFF00Toggle Status Panel|r",
+                    order = 955,
+                    get = GetStatusOption,
+                    set = SetStatusOption,
+                    args = {
+                        enabled = { type = "toggle", name = "Enabled", order = 1, width = "full" },
+                        pos = {
+                            type = "group",
+                            name = "Position",
+                            inline = true,
+                            order = 2,
+                            args = {
+                                x = { type = "range", name = "X", min = -1024, max = 1024, step = 1, order = 1, width = 1.49 },
+                                y = { type = "range", name = "Y", min = -768, max = 768, step = 1, order = 2, width = 1.49 },
+                            }
+                        },
+                        layout = {
+                            type = "group",
+                            name = "Layout",
+                            inline = true,
+                            order = 3,
+                            args = {
+                                grow = { type = "select", name = "Grow Direction", values = { RIGHT = "Right", DOWN = "Down" }, order = 1, width = 1.49 },
+                                scale = { type = "range", name = "Scale", min = 0.5, max = 2, step = 0.05, order = 2, width = 1.49 },
+                                spacing = { type = "range", name = "Spacing", min = 0, max = 20, step = 1, order = 3, width = 1.49 },
+                                fontSize = { type = "range", name = "Font Size", min = 8, max = 32, step = 1, order = 4, width = 1.49 },
+                            }
+                        },
+                        visibility = {
+                            type = "group",
+                            name = "Visibility",
+                            inline = true,
+                            order = 4,
+                            args = (function()
+                                local a = {}
+                                local keys = { "cooldowns","essences","potions","interrupts","defensives","funnel","custom1","custom2","custom3","custom4","custom5","custom6","custom7","custom8","custom9","custom10" }
+                                local o = 1
+                                for _, k in ipairs( keys ) do
+                                    a[k] = { type = "toggle", name = k:gsub("^%l", string.upper), order = o, width = 1.2, get = function()
+                                        local sp = Hekili.DB.profile.statusPanel
+                                        return sp.show and sp.show[k]
+                                    end, set = function(_, val)
+                                        local sp = Hekili.DB.profile.statusPanel
+                                        sp.show = sp.show or {}
+                                        sp.show[k] = val
+                                        QueueRebuildUI()
+                                    end }
+                                    o = o + 1
+                                end
+                                return a
+                            end)()
+                        }
                     }
                 },
 
@@ -10494,6 +10609,16 @@ do
                 self:Notify( toggles[ name ] .. ": " .. ( toggle.value and "ON" or "OFF" ) )
             else
                 self:Print( toggles[ name ] .. ( toggle.value and " |cFF00FF00ENABLED|r." or " |cFFFF0000DISABLED|r." ) )
+            end
+
+            -- Update status panel button visual if present.
+            if ns.UI and ns.UI.StatusPanel and ns.UI.StatusPanel.buttons then
+                for _, b in ipairs( ns.UI.StatusPanel.buttons ) do
+                    if b.key == name then
+                        b:SetBackdropColor( toggle.value and 0.1 or 0.5, toggle.value and 0.6 or 0.1, 0.1, 0.9 )
+                        break
+                    end
+                end
             end
         end
 

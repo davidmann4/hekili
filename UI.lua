@@ -3001,7 +3001,11 @@ function Hekili:BuildUI()
                     local on = t.value and 0 or 0.15
                     b:SetBackdropColor( t.value and 0.1 or 0.5, t.value and 0.6 or 0.1, 0.1, 0.9 )
                     b:SetHighlightTexture( "Interface/Buttons/UI-Listbox-Highlight2" )
-                    b:SetScript( "OnClick", function() Hekili:FireToggle( key ) Hekili:UpdateStatusPanel() end )
+                    -- Use the button's own key to avoid Lua closure-capture issues in loops.
+                    b:SetScript( "OnClick", function(self)
+                        Hekili:FireToggle( self.key )
+                        Hekili:UpdateStatusPanel()
+                    end )
                     b.text = b.text or b:CreateFontString( nil, "OVERLAY" )
                     b.text:SetFont( font, size, "OUTLINE" )
                     local label = ( key:match("custom%d+") and ( t.name or key ) ) or key:gsub("^%l", string.upper )
@@ -3061,7 +3065,18 @@ end
 
 function Hekili:UpdateStatusPanel()
     if not ns.UI.StatusPanel or not self.DB.profile.statusPanel.enabled then return end
-    self:BuildUI() -- simple rebuild for now; could be optimized
+    -- Update in place instead of rebuilding the entire UI (which could disrupt recommendation state).
+    local panel = ns.UI.StatusPanel
+    if not panel.buttons then return end
+
+    for _, b in ipairs( panel.buttons ) do
+        if b:IsShown() and b.key then
+            local t = self.DB.profile.toggles[ b.key ]
+            if t ~= nil then
+                b:SetBackdropColor( t.value and 0.1 or 0.5, t.value and 0.6 or 0.1, 0.1, 0.9 )
+            end
+        end
+    end
 end
 
 local T = ns.lib.Format.Tokens

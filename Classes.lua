@@ -54,6 +54,14 @@ local specTemplate = {
     -- Toggles
     custom1Name = "Custom 1",
     custom2Name = "Custom 2",
+    custom3Name = "Custom 3",
+    custom4Name = "Custom 4",
+    custom5Name = "Custom 5",
+    custom6Name = "Custom 6",
+    custom7Name = "Custom 7",
+    custom8Name = "Custom 8",
+    custom9Name = "Custom 9",
+    custom10Name = "Custom 10",
     noFeignedCooldown = false,
     disable_items = false,
 
@@ -90,6 +98,14 @@ local specTemplate = {
     defensives = {},
     custom1 = {},
     custom2 = {},
+    custom3 = {},
+    custom4 = {},
+    custom5 = {},
+    custom6 = {},
+    custom7 = {},
+    custom8 = {},
+    custom9 = {},
+    custom10 = {},
 }
 ns.specTemplate = specTemplate -- for options.
 

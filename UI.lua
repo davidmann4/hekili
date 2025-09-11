@@ -2995,7 +2995,11 @@ function Hekili:BuildUI()
             panel:SetScript( "OnDragStart", function( self ) if Hekili.Config then self:StartMoving() end end )
             panel:SetScript( "OnDragStop", function( self ) self:StopMovingOrSizing(); cfg.x, cfg.y = select(4, self:GetPoint()) end )
 
-            panel:SetBackdrop( { bgFile = "Interface/Tooltips/UI-Tooltip-Background", edgeFile = "Interface/Tooltips/UI-Tooltip-Border", edgeSize = 12, insets = { left = 2, right = 2, top = 2, bottom = 2 } } )
+            if cfg.border ~= false then
+                panel:SetBackdrop( { bgFile = "Interface/Tooltips/UI-Tooltip-Background", edgeFile = "Interface/Tooltips/UI-Tooltip-Border", edgeSize = 12, insets = { left = 2, right = 2, top = 2, bottom = 2 } } )
+            else
+                panel:SetBackdrop( { bgFile = "Interface/Tooltips/UI-Tooltip-Background", edgeSize = 12, insets = { left = 2, right = 2, top = 2, bottom = 2 } } )
+            end
             panel:SetBackdropColor( 0, 0, 0, 0.5 )
 
             panel.buttons = panel.buttons or {}

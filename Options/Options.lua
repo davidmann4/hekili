@@ -543,7 +543,16 @@ do
                         key = "",
                         value = false,
                         name = "Custom #2"
-                    }
+                    },
+
+                    custom3 = { key = "", value = false, name = "Custom #3" },
+                    custom4 = { key = "", value = false, name = "Custom #4" },
+                    custom5 = { key = "", value = false, name = "Custom #5" },
+                    custom6 = { key = "", value = false, name = "Custom #6" },
+                    custom7 = { key = "", value = false, name = "Custom #7" },
+                    custom8 = { key = "", value = false, name = "Custom #8" },
+                    custom9 = { key = "", value = false, name = "Custom #9" },
+                    custom10 = { key = "", value = false, name = "Custom #10" }
                 },
 
                 specs = {
@@ -8299,7 +8308,63 @@ do
                                     order = 3
                                 }
                             }
-                        }
+                        },
+                        custom3 = { type = "group", name = "", inline = true, order = 30.3, args = {
+                            key = { type = "keybinding", name = "Custom #3", desc = "Set a key to toggle your third custom set.", width = 1, order = 1 },
+                            value = { type = "toggle", name = "Enable Custom #3", desc = "If checked, abilities linked to Custom #3 can be recommended.", width = 2, order = 2 },
+                            lb1 = { type = "description", name = "", width = "full", order = 2.1 },
+                            indent1 = { type = "description", name = "", width = 1, order = 2.2 },
+                            name = { type = "input", name = "Custom #3 Name", desc = "Specify a descriptive name for this custom toggle.", width = 2, order = 3 }
+                        } },
+                        custom4 = { type = "group", name = "", inline = true, order = 30.4, args = {
+                            key = { type = "keybinding", name = "Custom #4", desc = "Set a key to toggle your fourth custom set.", width = 1, order = 1 },
+                            value = { type = "toggle", name = "Enable Custom #4", desc = "If checked, abilities linked to Custom #4 can be recommended.", width = 2, order = 2 },
+                            lb1 = { type = "description", name = "", width = "full", order = 2.1 },
+                            indent1 = { type = "description", name = "", width = 1, order = 2.2 },
+                            name = { type = "input", name = "Custom #4 Name", desc = "Specify a descriptive name for this custom toggle.", width = 2, order = 3 }
+                        } },
+                        custom5 = { type = "group", name = "", inline = true, order = 30.5, args = {
+                            key = { type = "keybinding", name = "Custom #5", desc = "Set a key to toggle your fifth custom set.", width = 1, order = 1 },
+                            value = { type = "toggle", name = "Enable Custom #5", desc = "If checked, abilities linked to Custom #5 can be recommended.", width = 2, order = 2 },
+                            lb1 = { type = "description", name = "", width = "full", order = 2.1 },
+                            indent1 = { type = "description", name = "", width = 1, order = 2.2 },
+                            name = { type = "input", name = "Custom #5 Name", desc = "Specify a descriptive name for this custom toggle.", width = 2, order = 3 }
+                        } },
+                        custom6 = { type = "group", name = "", inline = true, order = 30.6, args = {
+                            key = { type = "keybinding", name = "Custom #6", desc = "Set a key to toggle your sixth custom set.", width = 1, order = 1 },
+                            value = { type = "toggle", name = "Enable Custom #6", desc = "If checked, abilities linked to Custom #6 can be recommended.", width = 2, order = 2 },
+                            lb1 = { type = "description", name = "", width = "full", order = 2.1 },
+                            indent1 = { type = "description", name = "", width = 1, order = 2.2 },
+                            name = { type = "input", name = "Custom #6 Name", desc = "Specify a descriptive name for this custom toggle.", width = 2, order = 3 }
+                        } },
+                        custom7 = { type = "group", name = "", inline = true, order = 30.7, args = {
+                            key = { type = "keybinding", name = "Custom #7", desc = "Set a key to toggle your seventh custom set.", width = 1, order = 1 },
+                            value = { type = "toggle", name = "Enable Custom #7", desc = "If checked, abilities linked to Custom #7 can be recommended.", width = 2, order = 2 },
+                            lb1 = { type = "description", name = "", width = "full", order = 2.1 },
+                            indent1 = { type = "description", name = "", width = 1, order = 2.2 },
+                            name = { type = "input", name = "Custom #7 Name", desc = "Specify a descriptive name for this custom toggle.", width = 2, order = 3 }
+                        } },
+                        custom8 = { type = "group", name = "", inline = true, order = 30.8, args = {
+                            key = { type = "keybinding", name = "Custom #8", desc = "Set a key to toggle your eighth custom set.", width = 1, order = 1 },
+                            value = { type = "toggle", name = "Enable Custom #8", desc = "If checked, abilities linked to Custom #8 can be recommended.", width = 2, order = 2 },
+                            lb1 = { type = "description", name = "", width = "full", order = 2.1 },
+                            indent1 = { type = "description", name = "", width = 1, order = 2.2 },
+                            name = { type = "input", name = "Custom #8 Name", desc = "Specify a descriptive name for this custom toggle.", width = 2, order = 3 }
+                        } },
+                        custom9 = { type = "group", name = "", inline = true, order = 30.9, args = {
+                            key = { type = "keybinding", name = "Custom #9", desc = "Set a key to toggle your ninth custom set.", width = 1, order = 1 },
+                            value = { type = "toggle", name = "Enable Custom #9", desc = "If checked, abilities linked to Custom #9 can be recommended.", width = 2, order = 2 },
+                            lb1 = { type = "description", name = "", width = "full", order = 2.1 },
+                            indent1 = { type = "description", name = "", width = 1, order = 2.2 },
+                            name = { type = "input", name = "Custom #9 Name", desc = "Specify a descriptive name for this custom toggle.", width = 2, order = 3 }
+                        } },
+                        custom10 = { type = "group", name = "", inline = true, order = 31.0, args = {
+                            key = { type = "keybinding", name = "Custom #10", desc = "Set a key to toggle your tenth custom set.", width = 1, order = 1 },
+                            value = { type = "toggle", name = "Enable Custom #10", desc = "If checked, abilities linked to Custom #10 can be recommended.", width = 2, order = 2 },
+                            lb1 = { type = "description", name = "", width = "full", order = 2.1 },
+                            indent1 = { type = "description", name = "", width = 1, order = 2.2 },
+                            name = { type = "input", name = "Custom #10 Name", desc = "Specify a descriptive name for this custom toggle.", width = 2, order = 3 }
+                        } }
                     }
                 }
             }
@@ -10289,7 +10354,7 @@ do
         __index = function( t, k )
             local name = k:gsub( "^(.)", strupper )
             local toggle = Hekili.DB.profile.toggles[ k ]
-            if k == "custom1" or k == "custom2" then
+            if k:match("^custom%d+$") then
                 name = toggle and toggle.name or name
             elseif k == "essences" or k == "covenants" then
                 name = "Minor Cooldowns"

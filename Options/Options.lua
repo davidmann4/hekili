@@ -586,6 +586,7 @@ do
                     grow = "RIGHT", -- or DOWN
                     spacing = 2,
                     fontSize = 12,
+                    border = true,
                     show = {
                         cooldowns = true,
                         essences = true,
@@ -936,6 +937,9 @@ return end
     local function GetStatusOption( info )
         local opt = info[ #info ]
         local conf = Hekili.DB.profile.statusPanel or {}
+        if opt == "border" then
+            return conf.border ~= false
+        end
         return conf[ opt ]
     end
 
@@ -3291,6 +3295,7 @@ return "Position" end,
                                 scale = { type = "range", name = "Scale", min = 0.5, max = 2, step = 0.05, order = 2, width = 1.49 },
                                 spacing = { type = "range", name = "Spacing", min = 0, max = 20, step = 1, order = 3, width = 1.49 },
                                 fontSize = { type = "range", name = "Font Size", min = 8, max = 32, step = 1, order = 4, width = 1.49 },
+                                border = { type = "toggle", name = "Show Border", desc = "If enabled, the status panel shows a border around the widget.", order = 5, width = 1.49 },
                             }
                         },
                         visibility = {

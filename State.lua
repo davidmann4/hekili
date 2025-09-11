@@ -2588,6 +2588,30 @@ do
             if t.settings[ k ] ~= nil then return t.settings[ k ] end
             if t.toggle[ k ]   ~= nil then return t.toggle[ k ] end
 
+            -- Provide a default SimC-style fight_style table on demand so APLs referencing
+            -- fight_style.* (patchwerk/dungeonslice/dungeonroute/etc.) don't generate errors
+            -- if a spec didn't explicitly RegisterStateTable for it.  This mirrors the
+            -- previously commented example in Monk Windwalker.  Values:
+            --   patchwerk    -> boss (true in boss encounters)
+            --   dungeonroute -> false (conservative; prevents over-aggressive CD usage)
+            --   dungeonslice/DungeonSlice/Dungeonslice -> not boss (trash/cleave context)
+            if k == "fight_style" then
+                local fs = setmetatable( { onReset = function( self ) self.count = nil end }, {
+                    __index = function( _t, key )
+                        if key == "patchwerk" then
+                            return boss
+                        elseif key == "dungeonroute" then
+                            return false
+                        elseif key == "dungeonslice" or key == "DungeonSlice" or key == "Dungeonslice" then
+                            return not boss
+                        end
+                        return false
+                    end
+                } )
+                rawset( t, k, fs )
+                return fs
+            end
+
             if k ~= "scriptID" and not ( logged_state_errors[ t.scriptID ] and logged_state_errors[ t.scriptID ][ k ] ) then
                 Hekili:Error( "Unknown key '" .. k .. "' in emulated environment for [ " .. t.scriptID .. " : " .. t.this_action .. " ].\n\n" .. debugstack() )
                 logged_state_errors[ t.script ] = logged_state_errors[ t.script ] or {}

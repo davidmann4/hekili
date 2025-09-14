@@ -585,8 +585,17 @@ do
                     scale = 1,
                     grow = "RIGHT", -- or DOWN
                     spacing = 2,
+                    modePadding = 0,
                     fontSize = 12,
                     border = true,
+                    -- Which mode buttons to show on the status panel.
+                    modes = {
+                        automatic = true,
+                        single = true,
+                        aoe = true,
+                        dual = false,
+                        reactive = false,
+                    },
                     show = {
                         cooldowns = true,
                         essences = true,
@@ -3285,15 +3294,54 @@ return "Position" end,
                                 y = { type = "range", name = "Y", min = -768, max = 768, step = 1, order = 2, width = 1.49 },
                             }
                         },
+                        modes = {
+                            type = "group",
+                            name = "Mode Buttons",
+                            inline = true,
+                            order = 3.5,
+                            args = (function()
+                                local a = {}
+                                local list = {
+                                    { key = "automatic", label = "Automatic" },
+                                    { key = "single", label = "Single" },
+                                    { key = "aoe", label = "AOE" },
+                                    { key = "dual", label = "Dual" },
+                                    { key = "reactive", label = "Reactive" },
+                                }
+                                local o = 1
+                                for _, item in ipairs( list ) do
+                                    a[item.key] = {
+                                        type = "toggle",
+                                        name = item.label,
+                                        order = o,
+                                        width = 0.9,
+                                        get = function()
+                                            local sp = Hekili.DB.profile.statusPanel
+                                            sp.modes = sp.modes or {}
+                                            return sp.modes[item.key] ~= false
+                                        end,
+                                        set = function(_, val)
+                                            local sp = Hekili.DB.profile.statusPanel
+                                            sp.modes = sp.modes or {}
+                                            sp.modes[item.key] = val
+                                            QueueRebuildUI()
+                                        end,
+                                    }
+                                    o = o + 1
+                                end
+                                return a
+                            end)()
+                        },
                         layout = {
                             type = "group",
                             name = "Layout",
                             inline = true,
-                            order = 3,
+                            order = 4,
                             args = {
                                 grow = { type = "select", name = "Grow Direction", values = { RIGHT = "Right", DOWN = "Down" }, order = 1, width = 1.49 },
                                 scale = { type = "range", name = "Scale", min = 0.5, max = 2, step = 0.05, order = 2, width = 1.49 },
                                 spacing = { type = "range", name = "Spacing", min = 0, max = 20, step = 1, order = 3, width = 1.49 },
+                                modePadding = { type = "range", name = "Mode/Button Padding", desc = "Extra spacing inserted between the last mode button and the first regular toggle button.", min = 0, max = 40, step = 1, order = 3.1, width = 1.49 },
                                 fontSize = { type = "range", name = "Font Size", min = 8, max = 32, step = 1, order = 4, width = 1.49 },
                                 border = { type = "toggle", name = "Show Border", desc = "If enabled, the status panel shows a border around the widget.", order = 5, width = 1.49 },
                             }
@@ -3302,7 +3350,7 @@ return "Position" end,
                             type = "group",
                             name = "Visibility",
                             inline = true,
-                            order = 4,
+                            order = 5,
                             args = (function()
                                 local a = {}
                                 local keys = { "cooldowns","essences","potions","interrupts","defensives","funnel","custom1","custom2","custom3","custom4","custom5","custom6","custom7","custom8","custom9","custom10" }

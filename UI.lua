@@ -3004,14 +3004,71 @@ function Hekili:BuildUI()
 
             panel.buttons = panel.buttons or {}
 
-            local order = { "cooldowns", "essences", "potions", "interrupts", "defensives", "funnel", "custom1", "custom2", "custom3", "custom4", "custom5", "custom6", "custom7", "custom8", "custom9", "custom10" }
             local count = 0
             local font = LSM:Fetch( "font", self.DB.profile.notifications.font )
             local size = cfg.fontSize or 12
             local spacing = cfg.spacing or 2
+            local modePadding = cfg.modePadding or 0
             local growRight = ( cfg.grow ~= "DOWN" )
 
             local maxW, maxH = 0, 0
+            -- Build mode buttons first if configured
+            local modeLabels = {
+                automatic = "Auto",
+                single = "Single",
+                aoe = "AOE",
+                dual = "Dual",
+                reactive = "Reactive",
+            }
+            local modeOrder = { "automatic", "single", "aoe", "dual", "reactive" }
+            if cfg.modes then
+                for _, m in ipairs( modeOrder ) do
+                    if cfg.modes[m] then
+                        count = count + 1
+                        local b = panel.buttons[ count ] or CreateFrame( "Button", nil, panel, "BackdropTemplate" )
+                        panel.buttons[ count ] = b
+                        b.key = nil
+                        b.mode = m
+                        b:SetBackdrop( { bgFile = "Interface/Buttons/WHITE8X8" } )
+                        local active = ( self.DB.profile.toggles.mode.value == m )
+                        if active then
+                            b:SetBackdropColor( 0.1, 0.6, 0.1, 0.9 )
+                        else
+                            -- Inactive mode buttons: red like other toggles when off
+                            b:SetBackdropColor( 0.5, 0.1, 0.1, 0.9 )
+                        end
+                        b:SetHighlightTexture( "Interface/Buttons/UI-Listbox-Highlight2" )
+                        b:SetScript( "OnClick", function(self)
+                            Hekili:FireToggle( "mode", self.mode )
+                            Hekili:UpdateStatusPanel()
+                        end )
+                        b.text = b.text or b:CreateFontString( nil, "OVERLAY" )
+                        b.text:SetFont( font, size, "OUTLINE" )
+                        b.text:SetText( modeLabels[m] or m )
+                        b.text:SetPoint( "CENTER" )
+                        b:SetSize( b.text:GetStringWidth() + 12, size + 6 )
+
+                        if count == 1 then
+                            b:ClearAllPoints()
+                            b:SetPoint( "TOPLEFT", panel, "TOPLEFT", 6, -6 )
+                        else
+                            local anchor = panel.buttons[ count - 1 ]
+                            b:ClearAllPoints()
+                            if growRight then
+                                b:SetPoint( "LEFT", anchor, "RIGHT", spacing, 0 )
+                            else
+                                b:SetPoint( "TOP", anchor, "BOTTOM", 0, -spacing )
+                            end
+                        end
+                        b:Show()
+                        maxW = growRight and ( maxW + b:GetWidth() + ( count > 1 and spacing or 0 ) ) or math.max( maxW, b:GetWidth() )
+                        maxH = growRight and math.max( maxH, b:GetHeight() ) or ( maxH + b:GetHeight() + ( count > 1 and spacing or 0 ) )
+                    end
+                end
+            end
+
+            -- Then build normal toggle buttons
+            local order = { "cooldowns", "essences", "potions", "interrupts", "defensives", "funnel", "custom1", "custom2", "custom3", "custom4", "custom5", "custom6", "custom7", "custom8", "custom9", "custom10" }
             for i, key in ipairs( order ) do
                 local t = self.DB.profile.toggles[ key ]
                 local show = ( cfg.show and cfg.show[ key ] ) ~= false
@@ -3020,6 +3077,7 @@ function Hekili:BuildUI()
                     local b = panel.buttons[ count ] or CreateFrame( "Button", nil, panel, "BackdropTemplate" )
                     panel.buttons[ count ] = b
                     b.key = key
+                    b.mode = nil
                     b:SetBackdrop( { bgFile = "Interface/Buttons/WHITE8x8" } )
                     local on = t.value and 0 or 0.15
                     b:SetBackdropColor( t.value and 0.1 or 0.5, t.value and 0.6 or 0.1, 0.1, 0.9 )
@@ -3043,14 +3101,43 @@ function Hekili:BuildUI()
                         local anchor = panel.buttons[ count - 1 ]
                         b:ClearAllPoints()
                         if growRight then
-                            b:SetPoint( "LEFT", anchor, "RIGHT", spacing, 0 )
+                            -- Add extra padding between the last mode button and the first toggle.
+                            local gap = spacing
+                            if anchor.mode and not b.mode then
+                                gap = spacing + modePadding
+                            end
+                            b:SetPoint( "LEFT", anchor, "RIGHT", gap, 0 )
                         else
-                            b:SetPoint( "TOP", anchor, "BOTTOM", 0, -spacing )
+                            local gap = spacing
+                            if anchor.mode and not b.mode then
+                                gap = spacing + modePadding
+                            end
+                            b:SetPoint( "TOP", anchor, "BOTTOM", 0, -(gap) )
                         end
                     end
                     b:Show()
-                    maxW = growRight and ( maxW + b:GetWidth() + ( count > 1 and spacing or 0 ) ) or math.max( maxW, b:GetWidth() )
-                    maxH = growRight and math.max( maxH, b:GetHeight() ) or ( maxH + b:GetHeight() + ( count > 1 and spacing or 0 ) )
+                    -- Accumulate panel size, including any extra gap between mode and toggle sections.
+                    if growRight then
+                        local sep = ( count > 1 ) and spacing or 0
+                        if count > 1 then
+                            local prev = panel.buttons[ count - 1 ]
+                            if prev and prev.mode and not b.mode then
+                                sep = spacing + modePadding
+                            end
+                        end
+                        maxW = maxW + b:GetWidth() + sep
+                        maxH = math.max( maxH, b:GetHeight() )
+                    else
+                        local sep = ( count > 1 ) and spacing or 0
+                        if count > 1 then
+                            local prev = panel.buttons[ count - 1 ]
+                            if prev and prev.mode and not b.mode then
+                                sep = spacing + modePadding
+                            end
+                        end
+                        maxH = maxH + b:GetHeight() + sep
+                        maxW = math.max( maxW, b:GetWidth() )
+                    end
                 end
             end
 
@@ -3093,10 +3180,20 @@ function Hekili:UpdateStatusPanel()
     if not panel.buttons then return end
 
     for _, b in ipairs( panel.buttons ) do
-        if b:IsShown() and b.key then
-            local t = self.DB.profile.toggles[ b.key ]
-            if t ~= nil then
-                b:SetBackdropColor( t.value and 0.1 or 0.5, t.value and 0.6 or 0.1, 0.1, 0.9 )
+        if b:IsShown() then
+            if b.key then
+                local t = self.DB.profile.toggles[ b.key ]
+                if t ~= nil then
+                    b:SetBackdropColor( t.value and 0.1 or 0.5, t.value and 0.6 or 0.1, 0.1, 0.9 )
+                end
+            elseif b.mode then
+                local active = ( self.DB.profile.toggles.mode.value == b.mode )
+                if active then
+                    b:SetBackdropColor( 0.1, 0.6, 0.1, 0.9 )
+                else
+                    -- Inactive mode buttons are red
+                    b:SetBackdropColor( 0.5, 0.1, 0.1, 0.9 )
+                end
             end
         end
     end

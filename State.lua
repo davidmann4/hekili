@@ -1486,12 +1486,15 @@ state.raid_event.adds = setmetatable( {
     -- local difficulty = state.encounterDifficulty or 0 -- difficulty no longer needed after removing manual schedules.
 
         if k == "up" or k == "exists" then
-            return state.active_enemies > 1
+            return state.true_active_enemies > 1
         elseif k == "down" then
-            return state.active_enemies <= 1
+            return state.true_active_enemies <= 1
         elseif k == "count" then
-            return max( 0, state.active_enemies - 1 )
+            return max( 0, state.true_active_enemies - 1 )
         elseif k == "in" then
+            -- Ensure target counts are freshly computed so we don't use a stale value here.
+            if Hekili and Hekili.GetNumTargets then Hekili:GetNumTargets( true ) end
+
             -- Priority: If boss mod integration + filters exist for this encounter, use that.
             local nextIn = 3600
             if profile and encounterID > 0 and Hekili and Hekili.BossMods then
@@ -1503,10 +1506,10 @@ state.raid_event.adds = setmetatable( {
                     end
                 end
             end
-            if state.active_enemies > 1 then return 3600 end
+            if state.true_active_enemies > 1 then return 3600 end
             return nextIn
         elseif k == "duration" or k == "remains" then
-            return state.active_enemies > 1 and state.fight_remains or 0
+            return state.true_active_enemies > 1 and state.fight_remains or 0
         elseif raid_event_filter[k] ~= nil then return raid_event_filter[k] end
         return 0
     end

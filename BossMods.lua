@@ -11,8 +11,62 @@ local BM = Hekili.BossMods
 
 BM.bars = BM.bars or {}   -- [id] = { message/text, spellId, expires, duration, paused, remaining }
 BM.sources = BM.sources or {} -- Optional source info.
+BM.scheduled = BM.scheduled or {} -- Array of { t, id, instanceKey, text, spellId, offset, encounterId }
 
 local function Now() return GetTime() end
+
+-- Build a stable per-instance key: id:startTime
+local function InstanceKey( id, start )
+    return tostring( id ) .. ":" .. format( '%.2f', start or 0 )
+end
+
+-- Purge scheduled events that are in the past (keep a tiny grace to avoid churn).
+local function PurgeScheduled()
+    local now = Now()
+    local i = 1
+    while i <= #BM.scheduled do
+        if BM.scheduled[i].t <= now - 0.25 then
+            table.remove( BM.scheduled, i )
+        else
+            i = i + 1
+        end
+    end
+end
+
+-- Try to compile encounter filters; returns compiled array or nil.
+local function CompileFilters( encounterData )
+    if not encounterData then return nil end
+    local raw = encounterData.filters
+    if type( raw ) ~= 'string' or raw == '' then return nil end
+    if encounterData._compiledFilters and encounterData._compiledSource == raw then
+        return encounterData._compiledFilters
+    end
+    local compiled = {}
+    for line in raw:gmatch( '[^\n]+' ) do
+        for token in line:gmatch( '[^,]+' ) do
+            local s = strtrim( token )
+            if s ~= '' then
+                local base, sign, off = s:match( '^(.-)([+-])(%d+)$' )
+                local offset = 0
+                if base and off then
+                    s = strtrim( base )
+                    if sign == '+' then offset = tonumber( off ) or 0 else offset = -( tonumber( off ) or 0 ) end
+                end
+                if s ~= '' then
+                    local n = tonumber( s )
+                    if n then
+                        compiled[ #compiled + 1 ] = { kind = 'id', value = n, offset = offset }
+                    else
+                        compiled[ #compiled + 1 ] = { kind = 'text', value = s:lower(), offset = offset }
+                    end
+                end
+            end
+        end
+    end
+    encounterData._compiledFilters = compiled
+    encounterData._compiledSource = raw
+    return compiled
+end
 
 -- Purge expired bars.  We optionally retain bars for up to `retain` seconds after
 -- they expire so we can still apply positive offsets (e.g., bar ends then adds
@@ -38,6 +92,7 @@ end
 
 function BM:Reset()
     wipe( self.bars )
+    wipe( self.scheduled )
 end
 
 -- After enhancement: filters compiled to { kind = 'id'|'text', value=..., offset=seconds }
@@ -89,41 +144,6 @@ function BM:GetNextMatching( filters )
     return best
 end
 
--- Compile filters from encounter profile data (cached).
-local function CompileFilters( encounterData )
-    if not encounterData then return nil end
-    local raw = encounterData.filters
-    if type( raw ) ~= 'string' or raw == '' then return nil end
-    if encounterData._compiledFilters and encounterData._compiledSource == raw then
-        return encounterData._compiledFilters
-    end
-    local compiled = {}
-    for line in raw:gmatch( '[^\n]+' ) do
-        for token in line:gmatch( '[^,]+' ) do
-            local s = strtrim( token )
-            if s ~= '' then
-                local base, sign, off = s:match( '^(.-)([+-])(%d+)$' )
-                local offset = 0
-                if base and off then
-                    s = strtrim( base )
-                    if sign == '+' then offset = tonumber( off ) or 0 else offset = -( tonumber( off ) or 0 ) end
-                end
-                if s ~= '' then
-                    local n = tonumber( s )
-                    if n then
-                        compiled[ #compiled + 1 ] = { kind = 'id', value = n, offset = offset }
-                    else
-                        compiled[ #compiled + 1 ] = { kind = 'text', value = s:lower(), offset = offset }
-                    end
-                end
-            end
-        end
-    end
-    encounterData._compiledFilters = compiled
-    encounterData._compiledSource = raw
-    return compiled
-end
-
 function BM:GetNextAddSpawn( encounterID )
     if not encounterID or encounterID == 0 then return nil end
     local profile = Hekili.DB and Hekili.DB.profile
@@ -132,7 +152,75 @@ function BM:GetNextAddSpawn( encounterID )
     if not e then return nil end
     local filters = CompileFilters( e )
     if not filters or #filters == 0 then return nil end
+
+    -- Prefer scheduled events over scanning live bars; this makes offsets robust across restarts.
+    PurgeScheduled()
+    local now = Now()
+    local best
+    for i = 1, #BM.scheduled do
+        local ev = BM.scheduled[i]
+        if tonumber( ev.encounterId ) == tonumber( encounterID ) then
+            local remain = ev.t - now
+            if remain <= 0 then
+                best = 0
+                break
+            end
+            if not best or remain < best then best = remain end
+        end
+    end
+    if best ~= nil then return best end
+
+    -- Fallback to scanning bars if nothing is scheduled yet (e.g., reload mid-fight).
     return self:GetNextMatching( filters )
+end
+
+-- Schedule events for a given bar instance if it matches encounter filters.
+local function ScheduleForBar( id, bar )
+    local profile = Hekili.DB and Hekili.DB.profile
+    if not profile then return end
+    local encounters = profile.raidEvents and profile.raidEvents.adds and profile.raidEvents.adds.encounters
+    if type( encounters ) ~= 'table' then return end
+
+    local text = ( bar.message or bar.text or "" ):lower()
+    local spellId = bar.spellId and tonumber( bar.spellId ) or nil
+
+    for encId, e in pairs( encounters ) do
+        local filters = CompileFilters( e )
+        if filters and #filters > 0 then
+            for _, f in ipairs( filters ) do
+                local match
+                if f.kind == 'id' then
+                    match = ( spellId == f.value )
+                else
+                    match = ( f.value ~= '' and text:find( f.value, 1, true ) ~= nil )
+                end
+                if match then
+                    local t = ( bar.expires or Now() ) + ( f.offset or 0 )
+                    BM.scheduled[ #BM.scheduled + 1 ] = {
+                        t = t,
+                        id = id,
+                        instanceKey = bar.instanceKey,
+                        text = bar.message or bar.text,
+                        spellId = spellId,
+                        offset = f.offset or 0,
+                        encounterId = encId,
+                    }
+                    break -- only first matching token per bar for this encounter
+                end
+            end
+        end
+    end
+end
+
+-- If a bar instance updates (duration/elapsed), update corresponding scheduled time(s).
+local function RescheduleForBar( bar )
+    if not bar or not bar.instanceKey then return end
+    for i = 1, #BM.scheduled do
+        local ev = BM.scheduled[i]
+        if ev.instanceKey == bar.instanceKey then
+            ev.t = ( bar.expires or Now() ) + ( ev.offset or 0 )
+        end
+    end
 end
 
 -- DBM Integration
@@ -147,8 +235,8 @@ local function InitDBM()
         if not timerId then return end
         local now = Now()
         local existing = BM.bars[ timerId ]
-        if existing and not existing.paused and existing.expires <= now then
-            -- Clone expired bar so offset tail can finish counting down even if new bar starts.
+        if existing and not existing.paused then
+            -- Clone previous instance so its offset tail can finish, even if the new bar starts right before/at expiry.
             local cloneId = tostring( timerId ) .. ":" .. format( '%.2f', existing.expires )
             if not BM.bars[ cloneId ] then
                 local clone = {}
@@ -161,7 +249,8 @@ local function InitDBM()
         bar.message = msg
         bar.text = msg
         bar.duration = duration
-        bar.expires = Now() + ( duration or 0 )
+        bar.start = now
+        bar.expires = now + ( duration or 0 )
         bar.icon = icon
         bar.timerType = timerType
         -- Preserve existing spellId if new one is nil (older callback variants sometimes omit).
@@ -170,6 +259,9 @@ local function InitDBM()
         bar.count = timerCount or bar.count or 1
         bar.paused = false
         bar.remaining = nil
+        bar.instanceKey = InstanceKey( timerId, bar.start )
+
+        ScheduleForBar( timerId, bar )
     end
 
     -- Re-register both events with the unified handler (overrides earlier TimerBegin registration above).
@@ -177,7 +269,17 @@ local function InitDBM()
         DBM:RegisterCallback( evt, HandleDBMTimer )
     end
     DBM:RegisterCallback( "DBM_TimerStop", function( _, timerId )
-        if timerId and BM.bars[ timerId ] then BM.bars[ timerId ] = nil end
+        if timerId and BM.bars[ timerId ] then
+            local bar = BM.bars[ timerId ]
+            if bar and bar.instanceKey then
+                -- Remove scheduled events for this bar instance only.
+                local i = 1
+                while i <= #BM.scheduled do
+                    if BM.scheduled[i].instanceKey == bar.instanceKey then table.remove( BM.scheduled, i ) else i = i + 1 end
+                end
+            end
+            BM.bars[ timerId ] = nil
+        end
     end )
     DBM:RegisterCallback( "DBM_TimerPause", function( _, timerId )
         local bar = timerId and BM.bars[ timerId ]
@@ -201,6 +303,9 @@ local function InitDBM()
         if bar and not bar.paused then
             bar.duration = total
             bar.expires = Now() + ( total - elapsed )
+            if not bar.start then bar.start = bar.expires - total end
+            if not bar.instanceKey then bar.instanceKey = InstanceKey( timerId, bar.start ) end
+            RescheduleForBar( bar )
         end
     end )
 end
@@ -215,7 +320,8 @@ local function InitBigWigs()
         local id = key or text
         local now = Now()
         local existing = BM.bars[ id ]
-        if existing and not existing.paused and existing.expires <= now then
+        if existing and not existing.paused then
+            -- Clone previous instance so its offset tail can finish, even if the new bar starts right before/at expiry.
             local cloneId = tostring( id ) .. ":" .. format( '%.2f', existing.expires )
             if not BM.bars[ cloneId ] then
                 local clone = {}
@@ -228,16 +334,27 @@ local function InitBigWigs()
         bar.text = text
         bar.message = text
         bar.duration = time
-        bar.expires = Now() + ( time or 0 )
+        bar.start = now
+        bar.expires = now + ( time or 0 )
         bar.icon = icon
         local nkey = tonumber( key )
         bar.spellId = nkey and tostring( nkey ) or bar.spellId
         bar.count = 1
         bar.paused = false
         bar.remaining = nil
+        bar.instanceKey = InstanceKey( id, bar.start )
+
+        ScheduleForBar( id, bar )
     end )
     BigWigsLoader.RegisterMessage( BM, "BigWigs_StopBar", function( _, module, key )
         if key and BM.bars[ key ] then
+            local bar = BM.bars[ key ]
+            if bar and bar.instanceKey then
+                local i = 1
+                while i <= #BM.scheduled do
+                    if BM.scheduled[i].instanceKey == bar.instanceKey then table.remove( BM.scheduled, i ) else i = i + 1 end
+                end
+            end
             BM.bars[ key ] = nil
         end
     end )
@@ -256,6 +373,7 @@ local function InitBigWigs()
                 bar.expires = Now() + bar.remaining
             end
             bar.remaining = nil
+            RescheduleForBar( bar )
         end
     end )
 end

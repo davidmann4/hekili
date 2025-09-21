@@ -152,6 +152,7 @@ state.history = {
 }
 
 state.holds = {}
+state.virtualCooldowns = {}
 
 state.items = {}
 state.pet = {
@@ -839,6 +840,68 @@ local function setCooldown( action, duration )
     state.cooldown[ action ] = cd
 end
 state.setCooldown = setCooldown
+
+-- Set a virtual cooldown that expires after a specific time
+local function setVirtualCooldown( action, duration )
+    if not action or not duration or duration <= 0 then return end
+    
+    state.virtualCooldowns[ action ] = state.query_time + duration
+end
+state.setVirtualCooldown = setVirtualCooldown
+
+-- Check if an ability is on virtual cooldown
+local function isVirtualCooldownActive( action )
+    if not action then return false end
+    
+    local expiry = state.virtualCooldowns[ action ]
+    if not expiry then return false end
+    
+    if state.query_time >= expiry then
+        -- Cooldown has expired, remove it
+        state.virtualCooldowns[ action ] = nil
+        return false
+    end
+    
+    return true
+end
+state.isVirtualCooldownActive = isVirtualCooldownActive
+
+-- Get remaining time on virtual cooldown
+local function getVirtualCooldownRemains( action )
+    if not action then return 0 end
+    
+    local expiry = state.virtualCooldowns[ action ]
+    if not expiry then return 0 end
+    
+    local remains = expiry - state.query_time
+    if remains <= 0 then
+        -- Cooldown has expired, remove it
+        state.virtualCooldowns[ action ] = nil
+        return 0
+    end
+    
+    return remains
+end
+state.getVirtualCooldownRemains = getVirtualCooldownRemains
+
+-- Find ability key from spell ID
+local function findAbilityBySpellID( spellID )
+    if not spellID then return nil end
+    
+    -- Direct lookup by spell ID
+    local ability = class.abilities[ spellID ]
+    if ability then return ability.key end
+    
+    -- Search through all abilities
+    for key, ability in pairs( class.abilities ) do
+        if ability.id == spellID then
+            return key
+        end
+    end
+    
+    return nil
+end
+state.findAbilityBySpellID = findAbilityBySpellID
 
 
 local function spendCharges( action, charges )
@@ -3468,6 +3531,12 @@ do
             elseif k == "remains" then
                 if t.key == "global_cooldown" then
                     return max( 0, t.expires - state.query_time )
+                end
+
+                -- Check for virtual cooldowns first
+                local virtualRemains = state.getVirtualCooldownRemains( t.key )
+                if virtualRemains > 0 then
+                    return virtualRemains
                 end
 
                 -- If the ability is toggled off in the profile, we may want to fake its CD.
@@ -6510,6 +6579,13 @@ do
             end
         end
 
+        -- Clean up expired virtual cooldowns
+        for action, expiry in pairs( state.virtualCooldowns ) do
+            if state.query_time >= expiry then
+                state.virtualCooldowns[ action ] = nil
+            end
+        end
+
         for i, r in ipairs( realQueue ) do
             local e = NewEvent()
 
@@ -8137,5 +8213,11 @@ end
 for k, v in pairs( state ) do
     ns.commitKey( k )
 end
+
+-- Export virtual cooldown functions to main module
+Hekili.setVirtualCooldown = state.setVirtualCooldown
+Hekili.isVirtualCooldownActive = state.isVirtualCooldownActive
+Hekili.getVirtualCooldownRemains = state.getVirtualCooldownRemains
+Hekili.findAbilityBySpellID = state.findAbilityBySpellID
 
 ns.attr = { "serenity", "active", "active_enemies", "my_enemies", "active_flame_shock", "adds", "agility", "air", "armor", "attack_power", "bonus_armor", "cast_delay", "cast_time", "casting", "cooldown_react", "cooldown_remains", "cooldown_up", "crit_rating", "deficit", "distance", "down", "duration", "earth", "enabled", "energy", "execute_time", "fire", "five", "focus", "four", "gcd", "hardcasts", "haste", "haste_rating", "health", "health_max", "health_pct", "intellect", "level", "mana", "mastery_rating", "mastery_value", "max_nonproc", "max_stack", "maximum_energy", "maximum_focus", "maximum_health", "maximum_mana", "maximum_rage", "maximum_runic", "melee_haste", "miss_react", "moving", "mp5", "multistrike_pct", "multistrike_rating", "one", "pct", "rage", "react", "regen", "remains", "resilience_rating", "runic", "seal", "spell_haste", "spell_power", "spirit", "stack", "stack_pct", "stacks", "stamina", "strength", "this_action", "three", "tick_damage", "tick_dmg", "tick_time", "ticking", "ticks", "ticks_remain", "time", "time_to_die", "time_to_max", "travel_time", "two", "up", "water", "weapon_dps", "weapon_offhand_dps", "weapon_offhand_speed", "weapon_speed", "single", "aoe", "cleave", "percent", "last_judgment_target", "unit", "ready", "refreshable", "pvptalent", "conduit", "legendary", "runeforge", "covenant", "soulbind", "enabled", "full_recharge_time", "time_to_max_charges", "remains_guess", "execute", "actual", "current", "cast_regen", "boss", "exists", "disabled", "fight_remains", "last_used", "time_since", "max" }

@@ -12,6 +12,7 @@ local format, lower, match = string.format, string.lower, string.match
 local insert, remove, sort, wipe = table.insert, table.remove, table.sort, table.wipe
 
 local tableCopy =  ns.tableCopy
+local GetSpellInfo = ns.GetUnpackedSpellInfo
 
 local ACD = LibStub( "AceConfigDialog-3.0" )
 
@@ -78,17 +79,20 @@ function Hekili:CmdLine( input )
 
     -- Command handlers mapping
     local commandHandlers = {
-        set      = function () self:HandleSetCommand( args ) end,
-        profile  = function () self:HandleProfileCommand( args ) end,
-        priority = function () self:HandlePriorityCommand( args ) end,
-        enable   = function () self:HandleEnableDisableCommand( args ) end,
-        disable  = function () self:HandleEnableDisableCommand( args ) end,
-        move     = function () self:HandleMoveCommand( args ) end,
-        unlock   = function () self:HandleMoveCommand( args ) end,
-        lock     = function () self:HandleMoveCommand( args ) end,
-        stress   = function () self:RunStressTest() end,
-        dotinfo  = function () self:DumpDotInfo( args[2] ) end,
-        recover  = function () self:HandleRecoverCommand() end,
+        set            = function () self:HandleSetCommand( args ) end,
+        setcooldown    = function () self:HandleSetCooldownCommand( args ) end,
+        clearcooldowns = function () self:HandleClearCooldownsCommand( args ) end,
+        listcooldowns  = function () self:HandleListCooldownsCommand( args ) end,
+        profile        = function () self:HandleProfileCommand( args ) end,
+        priority       = function () self:HandlePriorityCommand( args ) end,
+        enable         = function () self:HandleEnableDisableCommand( args ) end,
+        disable        = function () self:HandleEnableDisableCommand( args ) end,
+        move           = function () self:HandleMoveCommand( args ) end,
+        unlock         = function () self:HandleMoveCommand( args ) end,
+        lock           = function () self:HandleMoveCommand( args ) end,
+        stress         = function () self:RunStressTest() end,
+        dotinfo        = function () self:DumpDotInfo( args[2] ) end,
+        recover        = function () self:HandleRecoverCommand() end,
         fix      = function () self:HandleFixCommand( args ) end,
         snapshot = function () self:MakeSnapshot() end,
         practice = function () if ns.Practice then ns.Practice:ToggleMode() end end,
@@ -481,7 +485,10 @@ function Hekili:DisplayChatCommandList( list )
             " - |cFFFFD100/hekili priority|r - View or change priority settings\n" ..
             " - |cFFFFD100/hekili profile|r - View or change profiles\n" ..
             " - |cFFFFD100/hekili move|r - Unlock or lock the UI for positioning\n" ..
-            " - |cFFFFD100/hekili enable|r or |cFFFFD100/hekili disable|r - Enable or disable the addon\n"
+            " - |cFFFFD100/hekili enable|r or |cFFFFD100/hekili disable|r - Enable or disable the addon\n" ..
+            " - |cFFFFD100/hekili setcooldown <spellID> <time>|r - Put a spell on virtual cooldown\n" ..
+            " - |cFFFFD100/hekili clearcooldowns|r - Clear all virtual cooldowns\n" ..
+            " - |cFFFFD100/hekili listcooldowns|r - List active virtual cooldowns\n"
     end
 
     -- Determine which sections to print based on the input
@@ -653,5 +660,108 @@ function Hekili:HandlePriorityCommand( args )
         output = output .. format( " %s%s|r%s", Hekili.DB.profile.packs[ priority ].builtIn and BlizzBlue or "|cFFFFD100", priority, i == #priorities and "." or "," )
     end
     self:Print( output )
+    return true
+end
+
+function Hekili:HandleSetCooldownCommand( args )
+    -- Usage: /hek setcooldown <spellID> <time>
+    -- e.g., /hek setcooldown 12345 30
+    
+    if not args[2] then
+        self:Print( "Usage: |cFFFFD100/hek setcooldown <spellID> <time>|r" )
+        self:Print( "Sets a virtual cooldown on the specified spell." )
+        self:Print( "Example: |cFFFFD100/hek setcooldown 12345 30|r (puts spell 12345 on cooldown for 30 seconds)" )
+        return true
+    end
+    
+    local spellID = tonumber( args[2] )
+    local time = tonumber( args[3] )
+    
+    if not spellID or spellID <= 0 then
+        self:Print( "Invalid spell ID. Please provide a valid numeric spell ID." )
+        return true
+    end
+    
+    if not time or time <= 0 then
+        self:Print( "Invalid time. Please provide a positive number of seconds." )
+        return true
+    end
+    
+    -- Check if the spell exists in game
+    local spellInfo = GetSpellInfo( spellID )
+    if not spellInfo then
+        self:Print( format( "Spell ID %d not found in game.", spellID ) )
+        return true
+    end
+    
+    -- Handle different return formats from GetSpellInfo
+    local spellName = type( spellInfo ) == "table" and spellInfo.name or spellInfo
+    
+    -- Find the ability key for this spell ID
+    local abilityKey = state.findAbilityBySpellID( spellID )
+    if not abilityKey then
+        self:Print( format( "Spell '%s' (ID: %d) is not tracked by Hekili.", spellName, spellID ) )
+        return true
+    end
+    
+    -- Set the virtual cooldown
+    state.setVirtualCooldown( abilityKey, time )
+    
+    self:Print( format( "Set |cFFFFD100%s|r (ID: %d) on virtual cooldown for |cFF00FF00%d|r seconds.", spellName, spellID, time ) )
+    
+    -- Force update the displays
+    self:ForceUpdate( "CLI_VIRTUAL_COOLDOWN" )
+    
+    return true
+end
+
+function Hekili:HandleClearCooldownsCommand( args )
+    -- Usage: /hek clearcooldowns
+    -- Clears all virtual cooldowns
+    
+    local count = 0
+    for action, expiry in pairs( state.virtualCooldowns ) do
+        count = count + 1
+    end
+    
+    if count == 0 then
+        self:Print( "No virtual cooldowns to clear." )
+        return true
+    end
+    
+    -- Clear all virtual cooldowns
+    wipe( state.virtualCooldowns )
+    
+    self:Print( format( "Cleared |cFF00FF00%d|r virtual cooldown%s.", count, count == 1 and "" or "s" ) )
+    
+    -- Force update the displays
+    self:ForceUpdate( "CLI_CLEAR_VIRTUAL_COOLDOWNS" )
+    
+    return true
+end
+
+function Hekili:HandleListCooldownsCommand( args )
+    -- Usage: /hek listcooldowns
+    -- Lists all active virtual cooldowns
+    
+    local count = 0
+    local output = "Active virtual cooldowns:"
+    
+    for action, expiry in pairs( state.virtualCooldowns ) do
+        local remains = expiry - state.query_time
+        if remains > 0 then
+            count = count + 1
+            local ability = class.abilities[ action ]
+            local abilityName = ability and ability.name or action
+            output = output .. format( "\n - |cFFFFD100%s|r: |cFF00FF00%.1f|r seconds", abilityName, remains )
+        end
+    end
+    
+    if count == 0 then
+        self:Print( "No active virtual cooldowns." )
+    else
+        self:Print( output )
+    end
+    
     return true
 end

@@ -4923,7 +4923,16 @@ do
                 return defaultValue
             end
 
+            -- If variable not registered in APLs, allow external persistent variables to satisfy it.
             if not db[ var ] then
+                -- Look for externally set persistent variables.
+                local p = Hekili and Hekili.DB and Hekili.DB.profile
+                local ext = p and p.stateVariables and rawget( p.stateVariables, var )
+                if ext ~= nil then
+                    if debug then Hekili:Debug( "Using external state variable '%s' = %s.", var, tostring( ext ) ) end
+                    return ext
+                end
+
                 if debug then Hekili:Debug( "No such variable '%s'.", var ) end
                 Hekili:Error( "Variable '%s' referenced in %s but is undefined.", var, state.scriptID )
                 return defaultValue
@@ -5084,6 +5093,13 @@ do
             end ]]
 
             state.scriptID = parent
+
+            -- If value is nil after APL evaluation, fall back to external persistent variables if present.
+            if value == nil then
+                local p = Hekili and Hekili.DB and Hekili.DB.profile
+                local ext = p and p.stateVariables and rawget( p.stateVariables, var )
+                if ext ~= nil then return ext end
+            end
 
             return value
         end

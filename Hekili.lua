@@ -661,6 +661,56 @@ end
 Hekili.Snapshots = ns.snapshots
 
 
+do
+    -- Fallback key normalizer in case ns.formatKey isn't available yet at load time
+    local function fallbackFormatKey( s )
+        s = tostring( s or "" )
+        s = s:lower():gsub( "[^%w_ ]", "" ):gsub( "%s+", "_" )
+        return s
+    end
+
+    local function normalizeKey( name )
+        if ns and ns.formatKey then return ns.formatKey( name ) end
+        return fallbackFormatKey( name )
+    end
+
+    local function trimString( s )
+        if type( s ) ~= "string" then return s end
+        return ( s:gsub( "^%s+", "" ):gsub( "%s+$", "" ) )
+    end
+
+    -- Sets a persistent state variable. Name is normalized; value can be number/boolean/string.
+    function Hekili:SetStateVariable( name, value )
+        if type( name ) ~= "string" or name == "" then return end
+        local key = normalizeKey( name )
+
+        -- Initialize DB if needed (during early load)
+        if not self.DB or not self.DB.profile then return end
+        local vars = self.DB.profile.stateVariables or {}
+        self.DB.profile.stateVariables = vars
+
+        -- Basic sanitation: coerce booleans/numbers; keep strings as-is.
+        if type( value ) == "string" then
+            local trimmed = trimString( value )
+            if trimmed == "true" then value = true
+            elseif trimmed == "false" then value = false
+            else
+                local num = tonumber( trimmed )
+                if num ~= nil then value = num else value = trimmed end
+            end
+        end
+
+        vars[ key ] = value
+    end
+
+    -- Retrieves a persistent state variable; returns nil if not set.
+    function Hekili:GetStateVariable( name )
+        if type( name ) ~= "string" or name == "" then return nil end
+        if not self.DB or not self.DB.profile or not self.DB.profile.stateVariables then return nil end
+        return self.DB.profile.stateVariables[ normalizeKey( name ) ]
+    end
+end
+
 
 ns.Tooltip = CreateFrame( "GameTooltip", "HekiliTooltip", UIParent, "GameTooltipTemplate" )
 Hekili:ProfileFrame( "HekiliTooltip", ns.Tooltip )

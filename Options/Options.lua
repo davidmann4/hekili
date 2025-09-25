@@ -480,6 +480,10 @@ do
                 autoSnapshot = true,
                 screenshot = true,
 
+                -- External state variables set via Hekili:SetStateVariable().
+                -- These persist in the profile until changed again.
+                stateVariables = {},
+
                 flashTexture = "Interface\\Cooldown\\star4",
                 performance = {
                     frameBudget = 0.7,

@@ -1548,8 +1548,17 @@ state.raid_event.adds = setmetatable( {
         local encounterID = state.encounterID or 0
     -- local difficulty = state.encounterDifficulty or 0 -- difficulty no longer needed after removing manual schedules.
 
-        if k == "up" or k == "exists" then
+        if k == "up" then
+            -- "up" remains tied to whether multiple targets are currently active.
             return state.true_active_enemies > 1
+        elseif k == "exists" or k == "exist" then
+            -- In SimC, raid_event.adds.exists is true if there is at least one matching raid event for "adds".
+            -- Here, approximate by checking if there's a custom config (filters) for the current encounter.
+            if profile and encounterID > 0 then
+                local e = profile.raidEvents and profile.raidEvents.adds and profile.raidEvents.adds.encounters and profile.raidEvents.adds.encounters[ encounterID ]
+                if e and e.filters and e.filters ~= "" then return 1 end
+            end
+            return 0
         elseif k == "down" then
             return state.true_active_enemies <= 1
         elseif k == "count" then
